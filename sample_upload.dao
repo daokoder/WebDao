@@ -1,0 +1,44 @@
+
+load webdao
+
+const html_form =
+@[html]
+<html>
+  <body>
+    Upload example.
+    <form method="POST" action="/handle_request" enctype="multipart/form-data">
+      First: <input type="text" name="first" /> <br/>
+      Second: <input type="text" name="second" /> <br/>
+      <input type="file" name="file" /> <br/>
+      <input type="submit" value="Upload" />
+    </form>
+  </body>
+</html>
+@[html]
+
+port = 8080
+numthread = 4
+
+Server::Start( port, numthread ){
+	[request, response, session]
+
+	response.WriteHeader( 200, {'Content-Type' => 'text/html'} );
+	response.Write( html_form );
+
+	# Get/Set session varaible:
+	value = session.GetVariable( 'Test' )
+	if( value == none ){
+		response.Write( 'Session expired!</br>' )
+		response.Write( 'Setting new value for session variable \"Test\"!</bf></br>' )
+		session.SetVariable( 'Test', rand(1000) )
+	}
+	response.Write( 'Session Variable: Test = ' + (string) session.GetVariable( 'Test' ) + '</br>' )
+
+
+	# Summarize uploaded files:
+	request.HttpFile.iterate {
+		response.Write( 'Uploaded Files: </br>\n' )
+		response.Write( 'name = ' + X + '; file = ' + Y.file + '; size = ' + (string) Y.size )
+		response.Write( '</br>\n' )
+	}
+}

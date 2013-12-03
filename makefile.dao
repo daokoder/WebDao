@@ -1,0 +1,19 @@
+
+project = DaoMake::Project( "Webdao" ) 
+
+daovm = DaoMake::FindPackage( "Dao", $REQUIRED )
+
+if( daovm == none ) return
+
+project.UseImportLibrary( daovm, "dao" )
+project.AddIncludePath( "." )
+
+project_objs = project.AddObjects( { "webdao.c", "Marten/marten.c" }, { "Marten/marten.h" } )
+project_dll  = project.AddSharedLibrary( "dao_webdao", project_objs )
+project_lib  = project.AddStaticLibrary( "dao_webdao", project_objs )
+
+
+project.GenerateFinder( $TRUE );
+project.Install( daovm.GetPath( "MOD-PATH" ), project_dll );
+project.Install( daovm.GetPath( "MOD-PATH" ), project_lib );
+project.Install( daovm.GetPath( "INSTALL-PATH" ) + "/shared/daomake/packages/", "FindWebDao.dao" );
