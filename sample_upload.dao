@@ -7,9 +7,8 @@ const html_form =
   <body>
     Upload example.
     <form method="POST" action="/handle_request" enctype="multipart/form-data">
-      First: <input type="text" name="first" /> <br/>
-      Second: <input type="text" name="second" /> <br/>
-      <input type="file" name="file" /> <br/>
+      <input type="file" name="file1" /> <br/>
+      <input type="file" name="file2" /> <br/>
       <input type="submit" value="Upload" />
     </form>
   </body>
@@ -25,17 +24,8 @@ Server::Start( port, numthread ){
 	response.WriteHeader( 200, {'Content-Type' => 'text/html'} );
 	response.Write( html_form );
 
-	# Get/Set session varaible:
-	value = session.GetVariable( 'Test' )
-	if( value == none ){
-		response.Write( 'Session expired!</br>' )
-		response.Write( 'Setting new value for session variable \"Test\"!</bf></br>' )
-		session.SetVariable( 'Test', rand(1000) )
-	}
-	response.Write( 'Session Variable: Test = ' + (string) session.GetVariable( 'Test' ) + '</br>' )
-
-
 	# Summarize uploaded files:
+    # request.HttpFile has type: map<string,tuple<file:string,size:int,data:io::stream>>
 	request.HttpFile.iterate {
 		response.Write( 'Uploaded Files: </br>\n' )
 		response.Write( 'name = ' + X + '; file = ' + Y.file + '; size = ' + (string) Y.size )
