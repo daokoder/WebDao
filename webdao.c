@@ -464,8 +464,10 @@ struct DaoxServer
 
 	DString  *docroot;
 
-	DMap  *indexFiles;
-	DMap  *staticMimes;
+	DArray   *indexFiles;
+	DMap     *staticMimes;
+
+	DMap  *uriToPaths;
 
 	DMap  *cookieToSessions;
 	DMap  *timestampToSessions;
@@ -479,6 +481,7 @@ struct DaoxServer
 	DArray  *allSessions;
 
 	DMutex   mutex;
+	DMutex   mutex2;
 	daoint   sessionIndex;
 };
 
@@ -490,8 +493,9 @@ DaoxServer* DaoxServer_New()
 	DaoxServer *self = (DaoxServer*) dao_calloc( 1, sizeof(DaoxServer) );
 	DaoCstruct_Init( (DaoCstruct*) self, daox_type_server );
 	self->docroot = DString_New(1);
-	self->indexFiles = DMap_New(D_STRING,D_STRING);
+	self->indexFiles = DArray_New(D_STRING);
 	self->staticMimes = DHash_New(D_STRING,D_STRING);
+	self->uriToPaths = DHash_New(D_STRING,D_STRING);
 	self->cookieToSessions = DHash_New(D_STRING,0);   // <DString*,DaoxSession*>
 	self->timestampToSessions = DMap_New(D_VALUE,0); // <DaoComplex,DaoxSession*>
 	self->freeRequests  = DArray_New(0); // <DaoxRequest*>
@@ -500,18 +504,20 @@ DaoxServer* DaoxServer_New()
 	self->allRequests  = DArray_New(D_VALUE); // <DaoxRequest*>
 	self->allResponses = DArray_New(D_VALUE); // <DaoxResponses*>
 	self->allSessions  = DArray_New(D_VALUE); // <DaoxSession*>
-	DMutex_Init( & self->mutex );
 	DString_SetMBS( self->docroot, dao_vmspace->startPath->mbs );
 	DaoxServer_InitMimeTypes( self );
 	DaoxServer_InitIndexFiles( self );
+	DMutex_Init( & self->mutex );
+	DMutex_Init( & self->mutex2 );
 	return self;
 }
 
 static void DaoxServer_Delete( DaoxServer *self )
 {
 	DString_Delete( self->docroot );
-	DMap_Delete( self->indexFiles );
+	DArray_Delete( self->indexFiles );
 	DMap_Delete( self->staticMimes );
+	DMap_Delete( self->uriToPaths );
 	DMap_Delete( self->cookieToSessions );
 	DMap_Delete( self->timestampToSessions );
 	DArray_Delete( self->freeRequests );
@@ -521,6 +527,7 @@ static void DaoxServer_Delete( DaoxServer *self )
 	DArray_Delete( self->allResponses );
 	DArray_Delete( self->allSessions );
 	DMutex_Destroy( & self->mutex );
+	DMutex_Destroy( & self->mutex2 );
 	DaoCstruct_Free( (DaoCstruct*) self );
 	dao_free( self );
 }
@@ -755,7 +762,8 @@ static void DaoxServer_InitIndexFiles( DaoxServer *self )
 	while( daox_index_mimes[++i].extension != NULL ){
 		DString key = DString_WrapMBS( daox_index_mimes[i].extension );
 		DString value = DString_WrapMBS( daox_static_mimes[i].mime_type );
-		DMap_Insert( self->indexFiles, & key, & value );
+		DArray_Append( self->indexFiles, & key );
+		DArray_Append( self->indexFiles, & value );
 	}
 }
 
@@ -939,16 +947,17 @@ static DaoTypeBase SessionTyper =
 
 static int DaoxWebdao_TrySendFile( mg_connection *conn )
 {
-	DNode *it;
+	int sendfile = 0;
+	int sect_b = dao_code_section->b;
+	const mg_request_info *ri = mg_get_request_info( conn );
 	DaoxRequest *request = NULL;
 	DaoxResponse *response = NULL;
 	DaoxSession *session = NULL;
 	DaoxServer *server = daox_webdao_server;
+	DString uri = DString_WrapMBS( ri->uri );
 	DString *path = DString_New(1);
 	DString *mime = DString_New(1);
-	const mg_request_info *ri = mg_get_request_info( conn );
-	int sect_b = dao_code_section->b;
-	int sendfile = 0;
+	DNode *it;
 
 	DString_SetMBS( path, ri->uri + 1 );
 	Dao_MakePath( server->docroot, path );
@@ -969,18 +978,23 @@ static int DaoxWebdao_TrySendFile( mg_connection *conn )
 		return 1;
 	}else if( Dao_IsDir( path->mbs ) ){
 		DString *path2 = DString_New(1);
-		for(it=DMap_First(server->indexFiles); it; it=DMap_Next(server->indexFiles,it)){
-			DString_Assign( path2, it->key.pString );
+		daoint i;
+		for(i=0; i<server->indexFiles->size; i+=2){
+			DString_Assign( path2, server->indexFiles->items.pString[i] );
 			Dao_MakePath( path, path2 );
 			if( Dao_IsFile( path2->mbs ) ){
 				DString_Assign( path, path2 );
-				DString_Assign( mime, it->value.pString );
+				DString_Assign( mime, server->indexFiles->items.pString[i+1] );
 				sendfile = 1;
 				break;
 			}
 		}
 		DString_Delete( path2 );
 	}
+	if( sendfile == 0 ) DString_Clear( path );
+	DMutex_Lock( & server->mutex2 );
+	DMap_Insert( server->uriToPaths, & uri, path );
+	DMutex_Unlock( & server->mutex2 );
 	if( sendfile == 0 ){
 		DString_Delete( path );
 		DString_Delete( mime );
@@ -1001,15 +1015,29 @@ static int DaoxWebdao_TrySendFile( mg_connection *conn )
 
 static int DaoxWebdao_HandleRequest( mg_connection *conn )
 {
+	int sect_a = dao_code_section->a;
+	int sect_b = dao_code_section->b;
+	const mg_request_info *ri = mg_get_request_info( conn );
+	DaoxServer *server = daox_webdao_server;
 	DaoProcess *process = NULL;
 	DaoxRequest *request = NULL;
 	DaoxResponse *response = NULL;
 	DaoxSession *session = NULL;
-	DaoxServer *server = daox_webdao_server;
-	int sect_a = dao_code_section->a;
-	int sect_b = dao_code_section->b;
+	DString uri = DString_WrapMBS( ri->uri );
+	DNode *it;
 
-	if( DaoxWebdao_TrySendFile( conn ) ) return 1;
+	DMutex_Lock( & server->mutex2 );
+	it = DMap_Find( server->uriToPaths, & uri );
+	DMutex_Unlock( & server->mutex2 );
+
+	if( it != NULL ){
+		if( it->value.pString->size ){
+			mg_send_file( conn, it->value.pString->mbs );
+			return 1;
+		}
+	}else if( DaoxWebdao_TrySendFile( conn ) ){
+		return 1;
+	}
 
 	request = DaoxServer_MakeRequest( server, conn );
 	response = DaoxServer_MakeResponse( server, conn );
