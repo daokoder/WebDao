@@ -1,0 +1,8 @@
+
+How to build?
+
+1. Place WebDao under the Dao modules folder as "dao/modules/webdao/";
+2. Under "dao/", run "make -f Makefile linux/macosx/win32 && make".
+
+After these steps, if you want to hacker on WebDao, you can simply run
+"make" to rebuild it after making modifications to the source code.
