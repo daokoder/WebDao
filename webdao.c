@@ -37,6 +37,13 @@
 
 #include "Marten/marten.h"
 
+#ifndef DAO_WITH_THREAD
+#define DMutex_Init(x)
+#define DMutex_Destroy(x)
+//#define DMutex_Lock(x)
+//#define DMutex_Unlock(x)
+#endif
+
 typedef struct mg_callbacks mg_callbacks;
 typedef struct mg_request_info mg_request_info;
 typedef struct mg_connection mg_connection;
@@ -109,14 +116,14 @@ DaoxRequest* DaoxRequest_New()
 	DaoGC_IncRC( (DaoValue*) self->http_post );
 	DaoGC_IncRC( (DaoValue*) self->http_cookie );
 	DaoGC_IncRC( (DaoValue*) self->http_file );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_get->unitype );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_post->unitype );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_cookie->unitype );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_filemap, (DaoValue*) self->http_file->unitype );
-	self->http_get->unitype = daox_type_keyvalue;
-	self->http_post->unitype = daox_type_keyvalue;
-	self->http_cookie->unitype = daox_type_keyvalue;
-	self->http_file->unitype = daox_type_filemap;
+	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_get->ctype );
+	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_post->ctype );
+	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_cookie->ctype );
+	DaoGC_ShiftRC( (DaoValue*) daox_type_filemap, (DaoValue*) self->http_file->ctype );
+	self->http_get->ctype = daox_type_keyvalue;
+	self->http_post->ctype = daox_type_keyvalue;
+	self->http_cookie->ctype = daox_type_keyvalue;
+	self->http_file->ctype = daox_type_filemap;
 	return self;
 }
 
@@ -653,14 +660,15 @@ DaoxSession* DaoxServer_MakeSession( DaoxServer *self, mg_connection *conn, Daox
 	}
 	session->timestamp.value.real = now + session->expire;
 
+#ifdef DEBUG
 	if( self->sessionIndex % 100 == 0 ){
 		int n1 = self->allSessions->size;
 		int n2 = self->cookieToSessions->size;
 		int n3 = self->timestampToSessions->size;
 		int n4 = self->freeSessions->size;
 		printf( "reused = %i %i %i %i %i\n", reused, n1, n2, n3, n4 );
+		//if( self->sessionIndex > 0 && self->sessionIndex % 1000 == 0 ) free(123);
 	}
-#ifdef DEBUG
 #endif
 	return session;
 }
