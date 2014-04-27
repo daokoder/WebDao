@@ -178,7 +178,8 @@ void DaoxRequest_ParseQueryString( DaoxRequest *self, DaoMap *vars, const char *
 		}else if( *data == '&' || *data == ';' ){
 			buffer->mbs[ buffer->size ] = 0;
 			DaoMap_Insert( vars, (DaoValue*) self->key, (DaoValue*) self->value );
-			key->size = value->size = 0;
+			DString_Reset( key, 0 );   /* also detaching shared memory; */
+			DString_Reset( value, 0 ); /* also detaching shared memory; */
 			buffer = key;
 		}else if( *data != ' ' ){
 			if( *data == '%' ){
