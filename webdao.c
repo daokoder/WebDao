@@ -341,7 +341,7 @@ DaoxResponse* DaoxResponse_New()
 {
 	DaoxResponse *self = (DaoxResponse*) dao_calloc( 1, sizeof(DaoxResponse) );
 	DaoCstruct_Init( (DaoCstruct*) self, daox_type_response );
-	self->cookies = DMap_New(D_STRING,D_STRING);
+	self->cookies = DMap_New( DAO_DATA_STRING, DAO_DATA_STRING );
 	return self;
 }
 
@@ -432,7 +432,7 @@ DaoxSession* DaoxSession_New()
 	DaoComplex com = {DAO_COMPLEX,0,0,0,1,{0.0,0.0}};
 	DaoxSession *self = (DaoxSession*) dao_calloc( 1, sizeof(DaoxSession) );
 	DaoCstruct_Init( (DaoCstruct*) self, daox_type_session );
-	self->variables = DHash_New(D_STRING,D_VALUE);
+	self->variables = DHash_New( DAO_DATA_STRING, DAO_DATA_VALUE );
 	self->cookie = DString_New(1);
 	self->timestamp = com;
 	self->expire = 5;
@@ -501,17 +501,17 @@ DaoxServer* DaoxServer_New()
 	DaoxServer *self = (DaoxServer*) dao_calloc( 1, sizeof(DaoxServer) );
 	DaoCstruct_Init( (DaoCstruct*) self, daox_type_server );
 	self->docroot = DString_New(1);
-	self->indexFiles = DArray_New(D_STRING);
-	self->staticMimes = DHash_New(D_STRING,D_STRING);
-	self->uriToPaths = DHash_New(D_STRING,D_STRING);
-	self->cookieToSessions = DHash_New(D_STRING,0);   // <DString*,DaoxSession*>
-	self->timestampToSessions = DMap_New(D_VALUE,0); // <DaoComplex,DaoxSession*>
+	self->indexFiles = DArray_New( DAO_DATA_STRING );
+	self->staticMimes = DHash_New( DAO_DATA_STRING, DAO_DATA_STRING );
+	self->uriToPaths = DHash_New( DAO_DATA_STRING, DAO_DATA_STRING );
+	self->cookieToSessions = DHash_New( DAO_DATA_STRING, 0 );   // <DString*,DaoxSession*>
+	self->timestampToSessions = DMap_New( DAO_DATA_VALUE, 0 ); // <DaoComplex,DaoxSession*>
 	self->freeRequests  = DArray_New(0); // <DaoxRequest*>
 	self->freeResponses = DArray_New(0); // <DaoxResponses*>
 	self->freeSessions = DArray_New(0); // <DaoxSessions*>
-	self->allRequests  = DArray_New(D_VALUE); // <DaoxRequest*>
-	self->allResponses = DArray_New(D_VALUE); // <DaoxResponses*>
-	self->allSessions  = DArray_New(D_VALUE); // <DaoxSession*>
+	self->allRequests  = DArray_New( DAO_DATA_VALUE ); // <DaoxRequest*>
+	self->allResponses = DArray_New( DAO_DATA_VALUE ); // <DaoxResponses*>
+	self->allSessions  = DArray_New( DAO_DATA_VALUE ); // <DaoxSession*>
 	DString_SetChars( self->docroot, dao_vmspace->startPath->bytes );
 	DaoxServer_InitMimeTypes( self );
 	DaoxServer_InitIndexFiles( self );
