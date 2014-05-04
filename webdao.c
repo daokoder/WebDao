@@ -172,11 +172,11 @@ void DaoxRequest_ParseQueryString( DaoxRequest *self, DaoMap *vars, const char *
 	for(; data < end; ++data){
 		if( buffer->size >= buffer->bufSize ) DString_Reserve( buffer, 1.5*buffer->size + 8 );
 		if( *data == '=' ){
-			buffer->bytes[ buffer->size ] = 0;
+			buffer->chars[ buffer->size ] = 0;
 			buffer = value;
 			buffer->size = 0;
 		}else if( *data == '&' || *data == ';' ){
-			buffer->bytes[ buffer->size ] = 0;
+			buffer->chars[ buffer->size ] = 0;
 			DaoMap_Insert( vars, (DaoValue*) self->key, (DaoValue*) self->value );
 			DString_Reset( key, 0 );   /* also detaching shared memory; */
 			DString_Reset( value, 0 ); /* also detaching shared memory; */
@@ -185,12 +185,12 @@ void DaoxRequest_ParseQueryString( DaoxRequest *self, DaoMap *vars, const char *
 			if( *data == '%' ){
 				char a = tolower( data[1] );
 				char b = tolower( data[2] );
-				buffer->bytes[ buffer->size ++ ] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
+				buffer->chars[ buffer->size ++ ] = (char) ((HEXTOI(a) << 4) | HEXTOI(b));
 				data += 2;
 			}else if( *data == '+' ){
-				buffer->bytes[ buffer->size ++ ] = ' ';
+				buffer->chars[ buffer->size ++ ] = ' ';
 			}else{
-				buffer->bytes[ buffer->size ++ ] = *data;
+				buffer->chars[ buffer->size ++ ] = *data;
 			}
 		}
 	}
@@ -240,7 +240,7 @@ void DaoxRequest_ParsePostData( DaoxRequest *self, mg_connection *conn )
 			DString_AppendBytes( buffer, postbuf, postlen );
 			postlen = mg_read( conn, postbuf, sizeof(postbuf) );
 		}
-		DaoxRequest_ParseQueryString( self, self->http_post, buffer->bytes );
+		DaoxRequest_ParseQueryString( self, self->http_post, buffer->chars );
 		DString_Delete( buffer );
 		return;
 	}
@@ -254,11 +254,11 @@ void DaoxRequest_ParsePostData( DaoxRequest *self, mg_connection *conn )
 		if( postlen == 0 && buffer->size < boundarylen ) break;
 
 		DString_AppendBytes( buffer, postbuf, postlen );
-		while( strstr( buffer->bytes, "\r\n\r\n" ) == 0 && postlen != 0 ){
+		while( strstr( buffer->chars, "\r\n\r\n" ) == 0 && postlen != 0 ){
 			postlen = mg_read( conn, postbuf, sizeof(postbuf) );
 			DString_AppendBytes( buffer, postbuf, postlen );
 		}
-		//printf( "###############\n%s\n", buffer->bytes );
+		//printf( "###############\n%s\n", buffer->chars );
 
 		key->size = 0;
 		fname->size = 0;
@@ -274,7 +274,7 @@ void DaoxRequest_ParsePostData( DaoxRequest *self, mg_connection *conn )
 		}
 
 		buffer->size -= pos_rnrn + 4;
-		memmove( buffer->bytes, buffer->bytes + pos_rnrn + 4, buffer->size );
+		memmove( buffer->chars, buffer->chars + pos_rnrn + 4, buffer->size );
 		if( fname->size == 0 ){
 			offset = 0;
 			while( (pos2 = DString_FindChars( buffer, boundary, offset )) == DAO_NULLPOS ){
@@ -286,7 +286,7 @@ void DaoxRequest_ParsePostData( DaoxRequest *self, mg_connection *conn )
 			DString_SubString( buffer, value, 0, pos2 - 4 ); /* \r\n-- */
 			DaoMap_Insert( self->http_post, (DaoValue*) self->key, (DaoValue*) self->value );
 			buffer->size -= pos2 + boundarylen;
-			memmove( buffer->bytes, buffer->bytes + pos2 + boundarylen, buffer->size );
+			memmove( buffer->chars, buffer->chars + pos2 + boundarylen, buffer->size );
 		}else{
 			DaoInteger isize = {DAO_INTEGER,0,0,0,0,0};
 			DaoStream *stream = DaoStream_New();
@@ -305,17 +305,17 @@ void DaoxRequest_ParsePostData( DaoxRequest *self, mg_connection *conn )
 				offset = buffer->size - boundarylen;
 				if( offset > 0 ){
 					isize.value += offset;
-					fwrite( buffer->bytes, 1, offset, file );
+					fwrite( buffer->chars, 1, offset, file );
 					buffer->size -= offset;
-					memmove( buffer->bytes, buffer->bytes + offset, buffer->size );
+					memmove( buffer->chars, buffer->chars + offset, buffer->size );
 				}
 				postlen = mg_read( conn, postbuf, sizeof(postbuf) );
 				DString_AppendBytes( buffer, postbuf, postlen );
 			}
 			isize.value += pos2 - 4;
-			fwrite( buffer->bytes, 1, pos2 - 4, file );  /* \r\n-- */
+			fwrite( buffer->chars, 1, pos2 - 4, file );  /* \r\n-- */
 			buffer->size -= pos2 + boundarylen;
-			memmove( buffer->bytes, buffer->bytes + pos2 + boundarylen, buffer->size );
+			memmove( buffer->chars, buffer->chars + pos2 + boundarylen, buffer->size );
 			rewind( file );
 			DaoTuple_SetItem( tuple, (DaoValue*) & isize, 1 );
 		}
@@ -512,7 +512,7 @@ DaoxServer* DaoxServer_New()
 	self->allRequests  = DArray_New( DAO_DATA_VALUE ); // <DaoxRequest*>
 	self->allResponses = DArray_New( DAO_DATA_VALUE ); // <DaoxResponses*>
 	self->allSessions  = DArray_New( DAO_DATA_VALUE ); // <DaoxSession*>
-	DString_SetChars( self->docroot, dao_vmspace->startPath->bytes );
+	DString_SetChars( self->docroot, dao_vmspace->startPath->chars );
 	DaoxServer_InitMimeTypes( self );
 	DaoxServer_InitIndexFiles( self );
 	DMutex_Init( & self->mutex );
@@ -970,28 +970,28 @@ static int DaoxWebdao_TrySendFile( mg_connection *conn )
 
 	DString_SetChars( path, ri->uri + 1 );
 	Dao_MakePath( server->docroot, path );
-	if( Dao_IsFile( path->bytes ) ){
+	if( Dao_IsFile( path->chars ) ){
 		daoint pos = DString_RFindChar( path, '.', -1 );
 		if( pos != DAO_NULLPOS ){
-			DString ext = DString_WrapChars( path->bytes + pos );
+			DString ext = DString_WrapChars( path->chars + pos );
 			it = DMap_Find( server->staticMimes, & ext );
 			if( it != NULL ){
 				sendfile = 1;
-				DString_SetChars( mime, it->value.pString->bytes );
+				DString_SetChars( mime, it->value.pString->chars );
 			}
 		}
-	}else if( Dao_IsDir( path->bytes ) && path->bytes[path->size-1] != '/' ){
+	}else if( Dao_IsDir( path->chars ) && path->chars[path->size-1] != '/' ){
 		mg_printf(conn, "HTTP/1.1 301 Moved Permanently\r\nLocation: %s/\r\n\r\n", ri->uri);
 		DString_Delete( path );
 		DString_Delete( mime );
 		return 1;
-	}else if( Dao_IsDir( path->bytes ) ){
+	}else if( Dao_IsDir( path->chars ) ){
 		DString *path2 = DString_New(1);
 		daoint i;
 		for(i=0; i<server->indexFiles->size; i+=2){
 			DString_Assign( path2, server->indexFiles->items.pString[i] );
 			Dao_MakePath( path, path2 );
-			if( Dao_IsFile( path2->bytes ) ){
+			if( Dao_IsFile( path2->chars ) ){
 				DString_Assign( path, path2 );
 				DString_Assign( mime, server->indexFiles->items.pString[i+1] );
 				sendfile = 1;
@@ -1009,14 +1009,14 @@ static int DaoxWebdao_TrySendFile( mg_connection *conn )
 		DString_Delete( mime );
 		return 0;
 	}
-	//printf( ">>>>>>>>>>>> path: %i %s\n", sendfile, path->bytes );
+	//printf( ">>>>>>>>>>>> path: %i %s\n", sendfile, path->chars );
 
 	if( sect_b >2 ){ /* Update session timestamp: */
 		request = DaoxServer_MakeRequest( server, conn );
 		session = DaoxServer_MakeSession( server, conn, request );
 		DaoxServer_CacheObjects( server, request, NULL, session );
 	}
-	mg_send_file( conn, path->bytes );
+	mg_send_file( conn, path->chars );
 	DString_Delete( path );
 	DString_Delete( mime );
 	return 1;
@@ -1041,7 +1041,7 @@ static int DaoxWebdao_HandleRequest( mg_connection *conn )
 
 	if( it != NULL ){
 		if( it->value.pString->size ){
-			mg_send_file( conn, it->value.pString->bytes );
+			mg_send_file( conn, it->value.pString->chars );
 			return 1;
 		}
 	}else if( DaoxWebdao_TrySendFile( conn ) ){
@@ -1053,7 +1053,7 @@ static int DaoxWebdao_HandleRequest( mg_connection *conn )
 	if( sect_b >2 ){
 		time_t expire = time(NULL) + 12*3600;
 		session = DaoxServer_MakeSession( server, conn, request );
-		DaoxResponse_SetCookie( response, "WebdaoSession", session->cookie->bytes, "/", expire );
+		DaoxResponse_SetCookie( response, "WebdaoSession", session->cookie->chars, "/", expire );
 	}
 
 	process = DaoVmSpace_AcquireProcess( dao_vmspace );
@@ -1099,7 +1099,7 @@ static void WEB_Start( DaoProcess *proc, DaoValue *p[], int N )
 
 	sprintf( port, "%i", (int) p[0]->xInteger.value );
 	sprintf( numthd, "%i", (int) p[1]->xInteger.value );
-	options[1] = daox_webdao_server->docroot->bytes;
+	options[1] = daox_webdao_server->docroot->chars;
 	options[3] = port;
 	options[5] = numthd;
 	memset(&callbacks, 0, sizeof(callbacks));
