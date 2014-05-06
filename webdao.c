@@ -1106,7 +1106,7 @@ static void WEB_Start( DaoProcess *proc, DaoValue *p[], int N )
 	callbacks.begin_request = DaoxWebdao_HandleRequest;
 
 	if( sect == NULL || DaoProcess_PushSectionFrame( proc ) == NULL ){
-		DaoProcess_RaiseException( proc, DAO_ERROR, "need code section" );
+		DaoProcess_RaiseError( proc, NULL, "need code section" );
 		return;
 	}
 	DaoCGC_Start();
@@ -1118,7 +1118,7 @@ static void WEB_Start( DaoProcess *proc, DaoValue *p[], int N )
 
 	ctx = mg_start( & callbacks, NULL, options );
 	if( ctx == NULL ){
-		DaoProcess_RaiseException( proc, DAO_ERROR, "failed to start the server" );
+		DaoProcess_RaiseError( proc, NULL, "failed to start the server" );
 		return;
 	}
 	mg_wait( ctx );
