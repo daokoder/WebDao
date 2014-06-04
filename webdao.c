@@ -1063,7 +1063,7 @@ static int DaoxWebdao_HandleRequest( mg_connection *conn )
 	DaoProcess_SetActiveFrame( process, process->topFrame );
 	DaoProcess_PushSectionFrame( process );
 	process->topFrame->outer = dao_process;
-	process->topFrame->sect = dao_process->topFrame->prev;
+	process->topFrame->host = dao_process->topFrame->prev;
 	process->topFrame->returning = -1;
 	process->topFrame->entry = dao_code_entry;
 
