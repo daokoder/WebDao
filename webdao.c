@@ -116,14 +116,10 @@ DaoxRequest* DaoxRequest_New()
 	DaoGC_IncRC( (DaoValue*) self->http_post );
 	DaoGC_IncRC( (DaoValue*) self->http_cookie );
 	DaoGC_IncRC( (DaoValue*) self->http_file );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_get->ctype );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_post->ctype );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_keyvalue, (DaoValue*) self->http_cookie->ctype );
-	DaoGC_ShiftRC( (DaoValue*) daox_type_filemap, (DaoValue*) self->http_file->ctype );
-	self->http_get->ctype = daox_type_keyvalue;
-	self->http_post->ctype = daox_type_keyvalue;
-	self->http_cookie->ctype = daox_type_keyvalue;
-	self->http_file->ctype = daox_type_filemap;
+	DaoGC_Assign( (DaoValue**) & self->http_get->ctype, (DaoValue*) daox_type_keyvalue );
+	DaoGC_Assign( (DaoValue**) & self->http_post->ctype, (DaoValue*) daox_type_keyvalue );
+	DaoGC_Assign( (DaoValue**) & self->http_cookie->ctype, (DaoValue*) daox_type_keyvalue );
+	DaoGC_Assign( (DaoValue**) & self->http_file->ctype, (DaoValue*) daox_type_filemap );
 	return self;
 }
 
@@ -449,10 +445,10 @@ static void DaoxSession_Delete( DaoxSession *self )
 	DaoCstruct_Free( (DaoCstruct*) self );
 	dao_free( self );
 }
-static void DaoxSession_GetGCFields( void *p, DArray *vs, DArray *as, DArray *maps, int rm )
+static void DaoxSession_GetGCFields( void *p, DList *vs, DList *as, DList *maps, int rm )
 {
 	DaoxSession *self = (DaoxSession*) p;
-	DArray_Append( maps, self->variables );
+	DList_Append( maps, self->variables );
 }
 static void DaoxSession_Reset( DaoxSession *self )
 {
@@ -472,7 +468,7 @@ struct DaoxServer
 
 	DString  *docroot;
 
-	DArray   *indexFiles;
+	DList   *indexFiles;
 	DMap     *staticMimes;
 
 	DMap  *uriToPaths;
@@ -480,13 +476,13 @@ struct DaoxServer
 	DMap  *cookieToSessions;
 	DMap  *timestampToSessions;
 
-	DArray  *freeRequests;
-	DArray  *freeResponses;
-	DArray  *freeSessions;
+	DList  *freeRequests;
+	DList  *freeResponses;
+	DList  *freeSessions;
 
-	DArray  *allRequests;
-	DArray  *allResponses;
-	DArray  *allSessions;
+	DList  *allRequests;
+	DList  *allResponses;
+	DList  *allSessions;
 
 	DMutex   mutex;
 	DMutex   mutex2;
@@ -501,17 +497,17 @@ DaoxServer* DaoxServer_New()
 	DaoxServer *self = (DaoxServer*) dao_calloc( 1, sizeof(DaoxServer) );
 	DaoCstruct_Init( (DaoCstruct*) self, daox_type_server );
 	self->docroot = DString_New(1);
-	self->indexFiles = DArray_New( DAO_DATA_STRING );
+	self->indexFiles = DList_New( DAO_DATA_STRING );
 	self->staticMimes = DHash_New( DAO_DATA_STRING, DAO_DATA_STRING );
 	self->uriToPaths = DHash_New( DAO_DATA_STRING, DAO_DATA_STRING );
 	self->cookieToSessions = DHash_New( DAO_DATA_STRING, 0 );   // <DString*,DaoxSession*>
 	self->timestampToSessions = DMap_New( DAO_DATA_VALUE, 0 ); // <DaoComplex,DaoxSession*>
-	self->freeRequests  = DArray_New(0); // <DaoxRequest*>
-	self->freeResponses = DArray_New(0); // <DaoxResponses*>
-	self->freeSessions = DArray_New(0); // <DaoxSessions*>
-	self->allRequests  = DArray_New( DAO_DATA_VALUE ); // <DaoxRequest*>
-	self->allResponses = DArray_New( DAO_DATA_VALUE ); // <DaoxResponses*>
-	self->allSessions  = DArray_New( DAO_DATA_VALUE ); // <DaoxSession*>
+	self->freeRequests  = DList_New(0); // <DaoxRequest*>
+	self->freeResponses = DList_New(0); // <DaoxResponses*>
+	self->freeSessions = DList_New(0); // <DaoxSessions*>
+	self->allRequests  = DList_New( DAO_DATA_VALUE ); // <DaoxRequest*>
+	self->allResponses = DList_New( DAO_DATA_VALUE ); // <DaoxResponses*>
+	self->allSessions  = DList_New( DAO_DATA_VALUE ); // <DaoxSession*>
 	DString_SetChars( self->docroot, dao_vmspace->startPath->chars );
 	DaoxServer_InitMimeTypes( self );
 	DaoxServer_InitIndexFiles( self );
@@ -523,28 +519,28 @@ DaoxServer* DaoxServer_New()
 static void DaoxServer_Delete( DaoxServer *self )
 {
 	DString_Delete( self->docroot );
-	DArray_Delete( self->indexFiles );
+	DList_Delete( self->indexFiles );
 	DMap_Delete( self->staticMimes );
 	DMap_Delete( self->uriToPaths );
 	DMap_Delete( self->cookieToSessions );
 	DMap_Delete( self->timestampToSessions );
-	DArray_Delete( self->freeRequests );
-	DArray_Delete( self->freeResponses );
-	DArray_Delete( self->freeSessions );
-	DArray_Delete( self->allRequests );
-	DArray_Delete( self->allResponses );
-	DArray_Delete( self->allSessions );
+	DList_Delete( self->freeRequests );
+	DList_Delete( self->freeResponses );
+	DList_Delete( self->freeSessions );
+	DList_Delete( self->allRequests );
+	DList_Delete( self->allResponses );
+	DList_Delete( self->allSessions );
 	DMutex_Destroy( & self->mutex );
 	DMutex_Destroy( & self->mutex2 );
 	DaoCstruct_Free( (DaoCstruct*) self );
 	dao_free( self );
 }
-static void DaoxServer_GetGCFields( void *p, DArray *vs, DArray *arrays, DArray *maps, int rm )
+static void DaoxServer_GetGCFields( void *p, DList *vs, DList *arrays, DList *maps, int rm )
 {
 	DaoxServer *self = (DaoxServer*) p;
-	DArray_Append( arrays, self->allRequests );
-	DArray_Append( arrays, self->allResponses );
-	DArray_Append( arrays, self->allSessions );
+	DList_Append( arrays, self->allRequests );
+	DList_Append( arrays, self->allResponses );
+	DList_Append( arrays, self->allSessions );
 }
 
 
@@ -558,7 +554,7 @@ DaoxRequest* DaoxServer_MakeRequest( DaoxServer *self, mg_connection *conn )
 	if( self->freeRequests->size ){
 		DMutex_Lock( & self->mutex );
 		if( self->freeRequests->size ){
-			request = (DaoxRequest*) DArray_PopFront( self->freeRequests );
+			request = (DaoxRequest*) DList_PopFront( self->freeRequests );
 			DaoxRequest_Reset( request );
 		}
 		DMutex_Unlock( & self->mutex );
@@ -567,7 +563,7 @@ DaoxRequest* DaoxServer_MakeRequest( DaoxServer *self, mg_connection *conn )
 	if( request == NULL ){
 		request = DaoxRequest_New();
 		DMutex_Lock( & self->mutex );
-		DArray_Append( self->allRequests, request );
+		DList_Append( self->allRequests, request );
 		DMutex_Unlock( & self->mutex );
 	}
 	request->remote_ip = ri->remote_ip;
@@ -586,7 +582,7 @@ DaoxResponse* DaoxServer_MakeResponse( DaoxServer *self, mg_connection *conn )
 	if( self->freeResponses->size ){
 		DMutex_Lock( & self->mutex );
 		if( self->freeResponses->size ){
-			response = (DaoxResponse*) DArray_PopFront( self->freeResponses );
+			response = (DaoxResponse*) DList_PopFront( self->freeResponses );
 			DaoxResponse_Reset( response );
 		}
 		DMutex_Unlock( & self->mutex );
@@ -595,7 +591,7 @@ DaoxResponse* DaoxServer_MakeResponse( DaoxServer *self, mg_connection *conn )
 	if( response == NULL ){
 		response = DaoxResponse_New();
 		DMutex_Lock( & self->mutex );
-		DArray_Append( self->allResponses, response );
+		DList_Append( self->allResponses, response );
 		DMutex_Unlock( & self->mutex );
 	}
 
@@ -619,7 +615,7 @@ DaoxSession* DaoxServer_MakeSession( DaoxServer *self, mg_connection *conn, Daox
 		DaoxSession *ss = (DaoxSession*) it->value.pValue;
 		if( ss->timestamp.value.real > now ) break;
 		DMap_Erase( self->cookieToSessions, ss->cookie );
-		DArray_Append( self->freeSessions, ss );
+		DList_Append( self->freeSessions, ss );
 	}
 	for(i=offset; i<self->freeSessions->size; ++i){
 		DaoxSession *ss = (DaoxSession*) self->freeSessions->items.pVoid[i];
@@ -646,7 +642,7 @@ DaoxSession* DaoxServer_MakeSession( DaoxServer *self, mg_connection *conn, Daox
 		// Try to reuse expired session object:
 		*/
 		DMutex_Lock( & self->mutex );
-		session = (DaoxSession*) DArray_PopBack( self->freeSessions );
+		session = (DaoxSession*) DList_PopBack( self->freeSessions );
 		DaoxSession_Reset( session );
 		DMap_Insert( self->cookieToSessions, session->cookie, session );
 		reused += 1;
@@ -655,7 +651,7 @@ DaoxSession* DaoxServer_MakeSession( DaoxServer *self, mg_connection *conn, Daox
 	if( session == NULL ){
 		session = DaoxSession_New();
 		DMutex_Lock( & self->mutex );
-		DArray_Append( self->allSessions, session );
+		DList_Append( self->allSessions, session );
 		DMap_Insert( self->cookieToSessions, session->cookie, session );
 		DMutex_Unlock( & self->mutex );
 	}
@@ -676,8 +672,8 @@ DaoxSession* DaoxServer_MakeSession( DaoxServer *self, mg_connection *conn, Daox
 static void DaoxServer_CacheObjects( DaoxServer *self, DaoxRequest *request, DaoxResponse *response, DaoxSession *session )
 {
 	DMutex_Lock( & self->mutex );
-	if( request != NULL ) DArray_Append( self->freeRequests, request );
-	if( response != NULL ) DArray_Append( self->freeResponses, response );
+	if( request != NULL ) DList_Append( self->freeRequests, request );
+	if( response != NULL ) DList_Append( self->freeResponses, response );
 	if( session != NULL ){
 		session->timestamp.value.imag = ++ self->sessionIndex;
 		DMap_Insert( self->timestampToSessions, (void*) & session->timestamp, session );
@@ -771,8 +767,8 @@ static void DaoxServer_InitIndexFiles( DaoxServer *self )
 	while( daox_index_mimes[++i].extension != NULL ){
 		DString key = DString_WrapChars( daox_index_mimes[i].extension );
 		DString value = DString_WrapChars( daox_static_mimes[i].mime_type );
-		DArray_Append( self->indexFiles, & key );
-		DArray_Append( self->indexFiles, & value );
+		DList_Append( self->indexFiles, & key );
+		DList_Append( self->indexFiles, & value );
 	}
 }
 
@@ -801,8 +797,7 @@ static void REQ_GETF_HttpGet( DaoProcess *proc, DaoValue *p[], int N )
 static void REQ_SETF_HttpGet( DaoProcess *proc, DaoValue *p[], int N )
 {
 	DaoxRequest *request = (DaoxRequest*) p[0];
-	GC_ShiftRC( p[1], (DaoValue*) request->http_get );
-	request->http_get = (DaoMap*) p[1];
+	GC_Assign( & request->http_get, p[1] );
 }
 static void REQ_GETF_HttpPost( DaoProcess *proc, DaoValue *p[], int N )
 {
@@ -812,8 +807,7 @@ static void REQ_GETF_HttpPost( DaoProcess *proc, DaoValue *p[], int N )
 static void REQ_SETF_HttpPost( DaoProcess *proc, DaoValue *p[], int N )
 {
 	DaoxRequest *request = (DaoxRequest*) p[0];
-	GC_ShiftRC( p[1], (DaoValue*) request->http_post );
-	request->http_post = (DaoMap*) p[1];
+	GC_Assign( & request->http_post, p[1] );
 }
 static void REQ_GETF_HttpCookie( DaoProcess *proc, DaoValue *p[], int N )
 {
@@ -823,8 +817,7 @@ static void REQ_GETF_HttpCookie( DaoProcess *proc, DaoValue *p[], int N )
 static void REQ_SETF_HttpCookie( DaoProcess *proc, DaoValue *p[], int N )
 {
 	DaoxRequest *request = (DaoxRequest*) p[0];
-	GC_ShiftRC( p[1], (DaoValue*) request->http_cookie );
-	request->http_cookie = (DaoMap*) p[1];
+	GC_Assign( & request->http_cookie, p[1] );
 }
 static void REQ_GETF_HttpFile( DaoProcess *proc, DaoValue *p[], int N )
 {
@@ -834,8 +827,7 @@ static void REQ_GETF_HttpFile( DaoProcess *proc, DaoValue *p[], int N )
 static void REQ_SETF_HttpFile( DaoProcess *proc, DaoValue *p[], int N )
 {
 	DaoxRequest *request = (DaoxRequest*) p[0];
-	GC_ShiftRC( p[1], (DaoValue*) request->http_file );
-	request->http_file = (DaoMap*) p[1];
+	GC_Assign( & request->http_file, p[1] );
 }
 
 static DaoFuncItem RequestMeths[] =
