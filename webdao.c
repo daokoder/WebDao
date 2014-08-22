@@ -1024,6 +1024,7 @@ static int DaoxWebdao_HandleRequest( mg_connection *conn )
 	DaoxRequest *request = NULL;
 	DaoxResponse *response = NULL;
 	DaoxSession *session = NULL;
+	DaoVmCode *sect = NULL;
 	DString uri = DString_WrapChars( ri->uri );
 	DNode *it;
 
@@ -1042,7 +1043,7 @@ static int DaoxWebdao_HandleRequest( mg_connection *conn )
 
 	request = DaoxServer_MakeRequest( server, conn );
 	response = DaoxServer_MakeResponse( server, conn );
-	if( sect_b >2 ){
+	if( sect_b > 2 ){
 		time_t expire = time(NULL) + 12*3600;
 		session = DaoxServer_MakeSession( server, conn, request );
 		DaoxResponse_SetCookie( response, "WebdaoSession", session->cookie->chars, "/", expire );
@@ -1052,8 +1053,15 @@ static int DaoxWebdao_HandleRequest( mg_connection *conn )
 	DaoProcess_PushRoutine( process, dao_process->activeRoutine, dao_process->activeObject );
 	process->activeCode = dao_process->activeCode;
 	DaoProcess_PushFunction( process, dao_process->topFrame->routine );
-	DaoProcess_SetActiveFrame( process, process->topFrame );
-	DaoProcess_PushSectionFrame( process );
+	DaoProcess_SetActiveFrame( process, process->topFrame->prev );
+	sect = DaoProcess_InitCodeSection( process, 3 );
+	if( sect == NULL ){
+		DaoProcess_PrintException( process, NULL, 1 );
+		DaoVmSpace_ReleaseProcess( dao_vmspace, process );
+		DaoxServer_CacheObjects( server, request, response, session );
+		return 1;
+	}
+
 	process->topFrame->outer = dao_process;
 	process->topFrame->host = dao_process->topFrame->prev;
 	process->topFrame->returning = -1;
@@ -1081,7 +1089,7 @@ static void WEB_Start( DaoProcess *proc, DaoValue *p[], int N )
 {
 	mg_context *ctx;
 	mg_callbacks callbacks;
-	DaoVmCode *sect = DaoGetSectionCode( proc->activeCode );
+	DaoVmCode *sect = DaoProcess_InitCodeSection( proc, 3 );
 	char port[16], numthd[16];
 	const char *options[7] = {
 		"document_root", ".",
@@ -1097,10 +1105,7 @@ static void WEB_Start( DaoProcess *proc, DaoValue *p[], int N )
 	memset(&callbacks, 0, sizeof(callbacks));
 	callbacks.begin_request = DaoxWebdao_HandleRequest;
 
-	if( sect == NULL || DaoProcess_PushSectionFrame( proc ) == NULL ){
-		DaoProcess_RaiseError( proc, NULL, "need code section" );
-		return;
-	}
+	if( sect == NULL ) return;
 	DaoCGC_Start();
 
 	dao_process = proc;
